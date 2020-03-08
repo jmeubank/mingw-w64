@@ -27,8 +27,14 @@
 #include "barrier.h"
 #include "ref.h" 
 #include "misc.h"
+#include "shmem3.h"
 
+#if !(USE_SHMEM3)
 static pthread_spinlock_t barrier_global = PTHREAD_SPINLOCK_INITIALIZER;
+#else
+__SHMEM_DEFINE_INIT(pthread_spinlock_t, barrier_global_shmem, PTHREAD_SPINLOCK_INITIALIZER)
+#define barrier_global __SHMEM_GET(pthread_spinlock_t, barrier_global_shmem)
+#endif
 
 static WINPTHREADS_ATTRIBUTE((noinline)) int
 barrier_unref(volatile pthread_barrier_t *barrier, int res)
