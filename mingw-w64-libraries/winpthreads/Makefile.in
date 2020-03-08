@@ -179,10 +179,12 @@ AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+MAYBE64 = $(if $(WINPTHREADS_TAG_64),_64,)
+TARGET_MAYBE64 = $(patsubst %.la,%$(MAYBE64).la,$@)
 libwinpthread_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(AM_CFLAGS) $(CFLAGS) $(libwinpthread_la_LDFLAGS) $(LDFLAGS) \
-	-o $@
+	-o $(TARGET_MAYBE64)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -680,7 +682,15 @@ src/libwinpthread_la-shmem.lo: src/$(am__dirstamp) \
 src/version.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
 
 libwinpthread.la: $(libwinpthread_la_OBJECTS) $(libwinpthread_la_DEPENDENCIES) $(EXTRA_libwinpthread_la_DEPENDENCIES) 
-	$(AM_V_CCLD)$(libwinpthread_la_LINK) -rpath $(libdir) $(libwinpthread_la_OBJECTS) $(libwinpthread_la_LIBADD) $(LIBS)
+	$(AM_V_CCLD)$(libwinpthread_la_LINK) -rpath $(libdir) $(libwinpthread_la_OBJECTS) $(libwinpthread_la_LIBADD) $(LIBS) \
+	&& rm -f "$@" \
+	&& cat ".libs/$(TARGET_MAYBE64)" | sed 's/\(.*\)_64\(\.dll\)\?\.a/\1\2\.a/' >"$@" \
+	&& cp -p "$@" ".libs/$@" \
+	&& cp -p "$@" ".libs/$@i" \
+	&& mv -f "$(patsubst %.la,%.dll.a,.libs/$(TARGET_MAYBE64))" tmp \
+	&& mv -f tmp "$(patsubst %.la,%.dll.a,.libs/$@)" \
+	&& mv -f "$(patsubst %.la,%.a,.libs/$(TARGET_MAYBE64))" tmp \
+	&& mv -f tmp "$(patsubst %.la,%.a,.libs/$@)"
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
