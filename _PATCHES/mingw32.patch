@@ -1,0 +1,285 @@
+Make winpthreads buildable for MinGW.org
+
+From: J.M. Eubank <john@thesnappy.net>
+
+
+---
+ mingw-w64-libraries/winpthreads/include/pthread.h  |   27 +++++++++++++-------
+ .../winpthreads/include/pthread_time.h             |   16 ++++++------
+ mingw-w64-libraries/winpthreads/src/clock.c        |   14 ++++++----
+ mingw-w64-libraries/winpthreads/src/cond.c         |   10 ++++---
+ mingw-w64-libraries/winpthreads/src/nanosleep.c    |    4 ++-
+ mingw-w64-libraries/winpthreads/src/ref.c          |    4 ++-
+ mingw-w64-libraries/winpthreads/src/thread.c       |    9 ++-----
+ 7 files changed, 48 insertions(+), 36 deletions(-)
+
+diff --git a/mingw-w64-libraries/winpthreads/include/pthread.h b/mingw-w64-libraries/winpthreads/include/pthread.h
+index 32676579..62d47123 100644
+--- a/mingw-w64-libraries/winpthreads/include/pthread.h
++++ b/mingw-w64-libraries/winpthreads/include/pthread.h
+@@ -60,6 +60,7 @@
+ #define WIN_PTHREADS_H
+ 
+ #include <stddef.h>
++#include <stdint.h>
+ #include <errno.h>
+ #include <sys/types.h>
+ 
+@@ -67,6 +68,7 @@
+ #include <limits.h>
+ #include <signal.h>
+ 
++#include <unistd.h>
+ #include <sys/timeb.h>
+ 
+ #include "pthread_compat.h"
+@@ -158,7 +160,7 @@ extern "C" {
+ #define PTHREAD_MUTEX_RECURSIVE_NP	PTHREAD_MUTEX_RECURSIVE
+ 
+ void * WINPTHREAD_API pthread_timechange_handler_np(void * dummy);
+-int    WINPTHREAD_API pthread_delay_np (const struct timespec *interval);
++/* int    WINPTHREAD_API pthread_delay_np (const struct timespec *interval); */
+ int    WINPTHREAD_API pthread_num_processors_np(void);
+ int    WINPTHREAD_API pthread_set_num_processors_np(int n);
+ 
+@@ -217,16 +219,21 @@ struct _pthread_cleanup
+ /* Windows doesn't have this, so declare it ourselves. */
+ #ifndef _TIMESPEC_DEFINED
+ #define _TIMESPEC_DEFINED
++/* MinGW.org defines a compatible struct timespec, guarded by
++ * __struct_timespec_defined, but doesn't define struct itimerspec.
++ */
++#if ! __struct_timespec_defined
++#define __struct_timespec_defined 1
+ struct timespec {
+   time_t  tv_sec;   /* Seconds */
+   long    tv_nsec;  /* Nanoseconds */
+ };
+-
++#endif /* ! __struct_timespec_defined */
+ struct itimerspec {
+   struct timespec  it_interval;  /* Timer period */
+   struct timespec  it_value;     /* Timer expiration */
+ };
+-#endif
++#endif /* ! defined _TIMESPEC_DEFINED */
+ 
+ #ifndef SCHED_OTHER
+ /* Some POSIX realtime extensions, mostly stubbed */
+@@ -385,16 +392,16 @@ int WINPTHREAD_API pthread_condattr_init(pthread_condattr_t *a);
+ int WINPTHREAD_API pthread_condattr_getpshared(const pthread_condattr_t *a, int *s);
+ int WINPTHREAD_API pthread_condattr_setpshared(pthread_condattr_t *a, int s);
+ 
+-#ifndef __clockid_t_defined
+-typedef int clockid_t;
+-#define __clockid_t_defined 1
+-#endif  /* __clockid_t_defined */
++#ifndef ____winpthreads_clockid_t_defined
++typedef int __winpthreads_clockid_t;
++#define ____winpthreads_clockid_t_defined 1
++#endif  /* ____winpthreads_clockid_t_defined */
+ 
+ int WINPTHREAD_API pthread_condattr_getclock (const pthread_condattr_t *attr,
+-       clockid_t *clock_id);
++       __winpthreads_clockid_t *clock_id);
+ int WINPTHREAD_API pthread_condattr_setclock(pthread_condattr_t *attr,
+-       clockid_t clock_id);
+-int WINPTHREAD_API __pthread_clock_nanosleep(clockid_t clock_id, int flags, const struct timespec *rqtp, struct timespec *rmtp);
++       __winpthreads_clockid_t clock_id);
++int WINPTHREAD_API __pthread_clock_nanosleep(__winpthreads_clockid_t clock_id, int flags, const struct timespec *rqtp, struct timespec *rmtp);
+ 
+ int WINPTHREAD_API pthread_barrierattr_init(void **attr);
+ int WINPTHREAD_API pthread_barrierattr_destroy(void **attr);
+diff --git a/mingw-w64-libraries/winpthreads/include/pthread_time.h b/mingw-w64-libraries/winpthreads/include/pthread_time.h
+index 7a7538c3..b4e3eca5 100644
+--- a/mingw-w64-libraries/winpthreads/include/pthread_time.h
++++ b/mingw-w64-libraries/winpthreads/include/pthread_time.h
+@@ -45,10 +45,10 @@
+ #define _POSIX_THREAD_CPUTIME   200809L
+ #endif
+ 
+-#ifndef __clockid_t_defined
+-typedef int clockid_t;
+-#define __clockid_t_defined 1
+-#endif  /* __clockid_t_defined */
++#ifndef ____winpthreads_clockid_t_defined
++typedef int __winpthreads_clockid_t;
++#define ____winpthreads_clockid_t_defined 1
++#endif  /* ____winpthreads_clockid_t_defined */
+ 
+ #ifndef TIMER_ABSTIME
+ #define TIMER_ABSTIME   1
+@@ -83,10 +83,10 @@ extern "C" {
+ /* These should really be dllimport'ed if using winpthread dll */
+ int __cdecl WINPTHREAD_API nanosleep(const struct timespec *request, struct timespec *remain);
+ 
+-int __cdecl WINPTHREAD_API clock_nanosleep(clockid_t clock_id, int flags, const struct timespec *request, struct timespec *remain);
+-int __cdecl WINPTHREAD_API clock_getres(clockid_t clock_id, struct timespec *res);
+-int __cdecl WINPTHREAD_API clock_gettime(clockid_t clock_id, struct timespec *tp);
+-int __cdecl WINPTHREAD_API clock_settime(clockid_t clock_id, const struct timespec *tp);
++int __cdecl WINPTHREAD_API clock_nanosleep(__winpthreads_clockid_t clock_id, int flags, const struct timespec *request, struct timespec *remain);
++int __cdecl WINPTHREAD_API __pthread_clock_getres(__winpthreads_clockid_t clock_id, struct timespec *res);
++int __cdecl WINPTHREAD_API __pthread_clock_gettime(__winpthreads_clockid_t clock_id, struct timespec *tp);
++int __cdecl WINPTHREAD_API __pthread_clock_settime(__winpthreads_clockid_t clock_id, const struct timespec *tp);
+ 
+ #pragma pop_macro("WINPTHREAD_API")
+ 
+diff --git a/mingw-w64-libraries/winpthreads/src/clock.c b/mingw-w64-libraries/winpthreads/src/clock.c
+index 5ad710b2..a24fef95 100644
+--- a/mingw-w64-libraries/winpthreads/src/clock.c
++++ b/mingw-w64-libraries/winpthreads/src/clock.c
+@@ -6,7 +6,9 @@
+ 
+ #include <errno.h>
+ #include <stdint.h>
+-#include <time.h>
++#ifdef __MINGW64__
++#   include <time.h>
++#endif
+ #include <windows.h>
+ #ifndef IN_WINPTHREAD
+ #define IN_WINPTHREAD 1
+@@ -50,7 +52,7 @@ static WINPTHREADS_INLINE int lc_set_errno(int result)
+  *         If the function fails, the return value is -1,
+  *         with errno set to indicate the error.
+  */
+-int clock_getres(clockid_t clock_id, struct timespec *res)
++int __pthread_clock_getres(__winpthreads_clockid_t clock_id, struct timespec *res)
+ {
+     switch(clock_id) {
+     case CLOCK_MONOTONIC:
+@@ -106,7 +108,7 @@ int clock_getres(clockid_t clock_id, struct timespec *res)
+  *         If the function fails, the return value is -1,
+  *         with errno set to indicate the error.
+  */
+-int clock_gettime(clockid_t clock_id, struct timespec *tp)
++int __pthread_clock_gettime(__winpthreads_clockid_t clock_id, struct timespec *tp)
+ {
+     unsigned __int64 t;
+     LARGE_INTEGER pf, pc;
+@@ -184,7 +186,7 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
+  *         If the function fails, the return value is -1,
+  *         with errno set to indicate the error.
+  */
+-int clock_nanosleep(clockid_t clock_id, int flags,
++int clock_nanosleep(__winpthreads_clockid_t clock_id, int flags,
+                            const struct timespec *request,
+                            struct timespec *remain)
+ {
+@@ -197,7 +199,7 @@ int clock_nanosleep(clockid_t clock_id, int flags,
+         return nanosleep(request, remain);
+ 
+     /* TIMER_ABSTIME = 1 */
+-    clock_gettime(CLOCK_REALTIME, &tp);
++    __pthread_clock_gettime(CLOCK_REALTIME, &tp);
+ 
+     tp.tv_sec = request->tv_sec - tp.tv_sec;
+     tp.tv_nsec = request->tv_nsec - tp.tv_nsec;
+@@ -217,7 +219,7 @@ int clock_nanosleep(clockid_t clock_id, int flags,
+  *         If the function fails, the return value is -1,
+  *         with errno set to indicate the error.
+  */
+-int clock_settime(clockid_t clock_id, const struct timespec *tp)
++int __pthread_clock_settime(__winpthreads_clockid_t clock_id, const struct timespec *tp)
+ {
+     SYSTEMTIME st;
+ 
+diff --git a/mingw-w64-libraries/winpthreads/src/cond.c b/mingw-w64-libraries/winpthreads/src/cond.c
+index 4e7a4387..f66a03a7 100644
+--- a/mingw-w64-libraries/winpthreads/src/cond.c
++++ b/mingw-w64-libraries/winpthreads/src/cond.c
+@@ -27,7 +27,9 @@
+ #include <windows.h>
+ #include <stdio.h>
+ #include <malloc.h>
+-#include <time.h>
++#ifdef __MINGW64__
++# include <time.h>
++#endif
+ #include "pthread.h"
+ #include "pthread_time.h"
+ #include "ref.h"
+@@ -133,7 +135,7 @@ pthread_condattr_getpshared (const pthread_condattr_t *a, int *s)
+ }
+ 
+ int
+-pthread_condattr_getclock (const pthread_condattr_t *a, clockid_t *clock_id)
++pthread_condattr_getclock (const pthread_condattr_t *a, __winpthreads_clockid_t *clock_id)
+ {
+   if (!a || !clock_id)
+     return EINVAL;
+@@ -142,7 +144,7 @@ pthread_condattr_getclock (const pthread_condattr_t *a, clockid_t *clock_id)
+ }
+ 
+ int
+-pthread_condattr_setclock(pthread_condattr_t *a, clockid_t clock_id)
++pthread_condattr_setclock(pthread_condattr_t *a, __winpthreads_clockid_t clock_id)
+ {
+   if (!a || clock_id != 0)
+     return EINVAL;
+@@ -150,7 +152,7 @@ pthread_condattr_setclock(pthread_condattr_t *a, clockid_t clock_id)
+ }
+ 
+ int
+-__pthread_clock_nanosleep (clockid_t clock_id, int flags, const struct timespec *rqtp,
++__pthread_clock_nanosleep (__winpthreads_clockid_t clock_id, int flags, const struct timespec *rqtp,
+ 			   struct timespec *rmtp)
+ {
+   unsigned long long tick, tick2;
+diff --git a/mingw-w64-libraries/winpthreads/src/nanosleep.c b/mingw-w64-libraries/winpthreads/src/nanosleep.c
+index 0cce4492..5410399f 100644
+--- a/mingw-w64-libraries/winpthreads/src/nanosleep.c
++++ b/mingw-w64-libraries/winpthreads/src/nanosleep.c
+@@ -5,7 +5,9 @@
+  */
+ 
+ #include <errno.h>
+-#include <time.h>
++#ifdef __MINGW64__
++#   include <time.h>
++#endif
+ #include <windows.h>
+ #include "pthread.h"
+ #include "pthread_time.h"
+diff --git a/mingw-w64-libraries/winpthreads/src/ref.c b/mingw-w64-libraries/winpthreads/src/ref.c
+index 0344d457..d58062a4 100644
+--- a/mingw-w64-libraries/winpthreads/src/ref.c
++++ b/mingw-w64-libraries/winpthreads/src/ref.c
+@@ -21,7 +21,9 @@
+ */
+ 
+ #include <windows.h>
+-#include <winternl.h>
++#ifdef __MINGW64__
++# include <winternl.h>
++#endif
+ #include <stdio.h>
+ #include "pthread.h"
+ #include "semaphore.h"
+diff --git a/mingw-w64-libraries/winpthreads/src/thread.c b/mingw-w64-libraries/winpthreads/src/thread.c
+index 4124c4c6..d081e1b2 100644
+--- a/mingw-w64-libraries/winpthreads/src/thread.c
++++ b/mingw-w64-libraries/winpthreads/src/thread.c
+@@ -21,7 +21,7 @@
+ */
+ 
+ #include <windows.h>
+-#include <strsafe.h>
++#include <string.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <malloc.h>
+@@ -1861,11 +1861,8 @@ pthread_getname_np (pthread_t thread, char *name, size_t len)
+       return 0;
+     }
+ 
+-  if (strlen (tv->thread_name) >= len)
+-    return ERANGE;
+-
+-  result = StringCchCopyNA (name, len, tv->thread_name, len - 1);
+-  if (SUCCEEDED (result))
++  result = memccpy(name, tv->thread_name, '\0', len);
++  if (result)
+     return 0;
+ 
+   return ERANGE;

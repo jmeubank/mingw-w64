@@ -1,0 +1,5 @@
+# This series applies on GIT commit 5eece15a2eb2e97da10d1e8cf5ff46e72b3bd768
+fullstatic.patch
+shmem.patch
+mingw32.patch
+lib64.patch

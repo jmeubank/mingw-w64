@@ -1,0 +1,50 @@
+Add a preprocessor flag to force non-DLL function declarations even in the presence of DLL compilation
+
+From: J.M. Eubank <john@thesnappy.net>
+
+
+---
+ mingw-w64-libraries/winpthreads/include/pthread.h  |    2 +-
+ mingw-w64-libraries/winpthreads/include/sched.h    |    2 +-
+ .../winpthreads/include/semaphore.h                |    2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/mingw-w64-libraries/winpthreads/include/pthread.h b/mingw-w64-libraries/winpthreads/include/pthread.h
+index 4c2affd3..32676579 100644
+--- a/mingw-w64-libraries/winpthreads/include/pthread.h
++++ b/mingw-w64-libraries/winpthreads/include/pthread.h
+@@ -82,7 +82,7 @@ extern "C" {
+ /* MSB 8-bit major version, 8-bit minor version, 16-bit patch level.  */
+ #define __WINPTHREADS_VERSION 0x00050000
+ 
+-#if defined DLL_EXPORT
++#if defined DLL_EXPORT && !defined WINPTHREAD_STATIC
+ #ifdef IN_WINPTHREAD
+ #define WINPTHREAD_API __declspec(dllexport)
+ #else
+diff --git a/mingw-w64-libraries/winpthreads/include/sched.h b/mingw-w64-libraries/winpthreads/include/sched.h
+index e77bf4cc..c0ba2408 100644
+--- a/mingw-w64-libraries/winpthreads/include/sched.h
++++ b/mingw-w64-libraries/winpthreads/include/sched.h
+@@ -49,7 +49,7 @@ struct sched_param {
+ extern "C" {
+ #endif
+ 
+-#if defined DLL_EXPORT && !defined (WINPTHREAD_EXPORT_ALL_DEBUG)
++#if defined DLL_EXPORT && !defined (WINPTHREAD_EXPORT_ALL_DEBUG) && !defined WINPTHREAD_STATIC
+ #ifdef IN_WINPTHREAD
+ #define WINPTHREAD_SCHED_API __declspec(dllexport)
+ #else
+diff --git a/mingw-w64-libraries/winpthreads/include/semaphore.h b/mingw-w64-libraries/winpthreads/include/semaphore.h
+index 14cb7037..8d54956f 100644
+--- a/mingw-w64-libraries/winpthreads/include/semaphore.h
++++ b/mingw-w64-libraries/winpthreads/include/semaphore.h
+@@ -27,7 +27,7 @@
+ extern "C" {
+ #endif
+ 
+-#if defined DLL_EXPORT && !defined (WINPTHREAD_EXPORT_ALL_DEBUG)
++#if defined DLL_EXPORT && !defined (WINPTHREAD_EXPORT_ALL_DEBUG) && !defined WINPTHREAD_STATIC
+ #ifdef IN_WINPTHREAD
+ #define WINPTHREAD_SEMA_API __declspec(dllexport)
+ #else

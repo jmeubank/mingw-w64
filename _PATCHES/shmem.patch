@@ -1,0 +1,501 @@
+Allow sharing pthreads handles among DLLs and EXEs even when compiled statically
+
+From: J.M. Eubank <john@thesnappy.net>
+
+
+---
+ mingw-w64-libraries/winpthreads/Makefile.am   |    2 
+ mingw-w64-libraries/winpthreads/Makefile.in   |   15 +++
+ mingw-w64-libraries/winpthreads/src/barrier.c |    6 +
+ mingw-w64-libraries/winpthreads/src/cond.c    |    6 +
+ mingw-w64-libraries/winpthreads/src/rwlock.c  |   11 ++
+ mingw-w64-libraries/winpthreads/src/shmem.c   |  117 +++++++++++++++++++++++++
+ mingw-w64-libraries/winpthreads/src/shmem.h   |  115 +++++++++++++++++++++++++
+ mingw-w64-libraries/winpthreads/src/thread.c  |   63 +++++++++----
+ 8 files changed, 313 insertions(+), 22 deletions(-)
+ create mode 100644 mingw-w64-libraries/winpthreads/src/shmem.c
+ create mode 100644 mingw-w64-libraries/winpthreads/src/shmem.h
+
+diff --git a/mingw-w64-libraries/winpthreads/Makefile.am b/mingw-w64-libraries/winpthreads/Makefile.am
+index e674a35e..a0297244 100644
+--- a/mingw-w64-libraries/winpthreads/Makefile.am
++++ b/mingw-w64-libraries/winpthreads/Makefile.am
+@@ -13,7 +13,7 @@ EXTRA_libwinpthread_la_DEPENDENCIES = fakelib/libgcc.a  fakelib/libgcc_eh.a  fak
+ libwinpthread_la_SOURCES = \
+   src/barrier.h  src/cond.h  src/misc.h  src/mutex.h  src/rwlock.h  src/spinlock.h  src/thread.h  src/ref.h  src/sem.h  src/wpth_ver.h \
+   src/barrier.c  src/cond.c  src/misc.c  src/mutex.c  src/rwlock.c  src/spinlock.c  src/thread.c  src/ref.c  src/sem.c  src/sched.c \
+-  src/winpthread_internal.h  src/clock.c src/nanosleep.c src/version.rc
++  src/winpthread_internal.h  src/clock.c src/nanosleep.c src/version.rc src/shmem.c
+ 
+ # Break circular dep on bootstrap
+ noinst_LIBRARIES = fakelib/libgcc.a  fakelib/libgcc_eh.a  fakelib/libgcc_s.a
+diff --git a/mingw-w64-libraries/winpthreads/Makefile.in b/mingw-w64-libraries/winpthreads/Makefile.in
+index 1c3ae07b..41795687 100644
+--- a/mingw-w64-libraries/winpthreads/Makefile.in
++++ b/mingw-w64-libraries/winpthreads/Makefile.in
+@@ -172,7 +172,8 @@ am_libwinpthread_la_OBJECTS = src/libwinpthread_la-barrier.lo \
+ 	src/libwinpthread_la-thread.lo src/libwinpthread_la-ref.lo \
+ 	src/libwinpthread_la-sem.lo src/libwinpthread_la-sched.lo \
+ 	src/libwinpthread_la-clock.lo \
+-	src/libwinpthread_la-nanosleep.lo src/version.lo
++	src/libwinpthread_la-nanosleep.lo src/version.lo \
++	src/libwinpthread_la-shmem.lo
+ libwinpthread_la_OBJECTS = $(am_libwinpthread_la_OBJECTS)
+ AM_V_lt = $(am__v_lt_@AM_V@)
+ am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
+@@ -464,7 +465,7 @@ EXTRA_libwinpthread_la_DEPENDENCIES = fakelib/libgcc.a  fakelib/libgcc_eh.a  fak
+ libwinpthread_la_SOURCES = \
+   src/barrier.h  src/cond.h  src/misc.h  src/mutex.h  src/rwlock.h  src/spinlock.h  src/thread.h  src/ref.h  src/sem.h  src/wpth_ver.h \
+   src/barrier.c  src/cond.c  src/misc.c  src/mutex.c  src/rwlock.c  src/spinlock.c  src/thread.c  src/ref.c  src/sem.c  src/sched.c \
+-  src/winpthread_internal.h  src/clock.c src/nanosleep.c src/version.rc
++  src/winpthread_internal.h  src/clock.c src/nanosleep.c src/version.rc src/shmem.c
+ 
+ 
+ # Break circular dep on bootstrap
+@@ -674,6 +675,8 @@ src/libwinpthread_la-clock.lo: src/$(am__dirstamp) \
+ 	src/$(DEPDIR)/$(am__dirstamp)
+ src/libwinpthread_la-nanosleep.lo: src/$(am__dirstamp) \
+ 	src/$(DEPDIR)/$(am__dirstamp)
++src/libwinpthread_la-shmem.lo: src/$(am__dirstamp) \
++	src/$(DEPDIR)/$(am__dirstamp)
+ src/version.lo: src/$(am__dirstamp) src/$(DEPDIR)/$(am__dirstamp)
+ 
+ libwinpthread.la: $(libwinpthread_la_OBJECTS) $(libwinpthread_la_DEPENDENCIES) $(EXTRA_libwinpthread_la_DEPENDENCIES) 
+@@ -698,6 +701,7 @@ distclean-compile:
+ @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/libwinpthread_la-rwlock.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/libwinpthread_la-sched.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/libwinpthread_la-sem.Plo@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/libwinpthread_la-shmem.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/libwinpthread_la-spinlock.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/libwinpthread_la-thread.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@src/libgcc/$(DEPDIR)/dll_dependency.Po@am__quote@
+@@ -835,6 +839,13 @@ src/libwinpthread_la-nanosleep.lo: src/nanosleep.c
+ @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+ @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libwinpthread_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o src/libwinpthread_la-nanosleep.lo `test -f 'src/nanosleep.c' || echo '$(srcdir)/'`src/nanosleep.c
+ 
++src/libwinpthread_la-shmem.lo: src/shmem.c
++@am__fastdepCC_TRUE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libwinpthread_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT src/libwinpthread_la-shmem.lo -MD -MP -MF src/$(DEPDIR)/libwinpthread_la-shmem.Tpo -c -o src/libwinpthread_la-shmem.lo `test -f 'src/shmem.c' || echo '$(srcdir)/'`src/shmem.c
++@am__fastdepCC_TRUE@	$(am__mv) src/$(DEPDIR)/libwinpthread_la-shmem.Tpo src/$(DEPDIR)/libwinpthread_la-shmem.Plo
++@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='src/shmem.c' object='src/libwinpthread_la-shmem.lo' libtool=yes @AMDEPBACKSLASH@
++@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
++@am__fastdepCC_FALSE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libwinpthread_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o src/libwinpthread_la-shmem.lo `test -f 'src/shmem.c' || echo '$(srcdir)/'`src/shmem.c
++
+ mostlyclean-libtool:
+ 	-rm -f *.lo
+ 
+diff --git a/mingw-w64-libraries/winpthreads/src/barrier.c b/mingw-w64-libraries/winpthreads/src/barrier.c
+index 95b2252a..85c16917 100644
+--- a/mingw-w64-libraries/winpthreads/src/barrier.c
++++ b/mingw-w64-libraries/winpthreads/src/barrier.c
+@@ -27,8 +27,14 @@
+ #include "barrier.h"
+ #include "ref.h" 
+ #include "misc.h"
++#include "shmem.h"
+ 
++#if !(USE_SHMEM)
+ static pthread_spinlock_t barrier_global = PTHREAD_SPINLOCK_INITIALIZER;
++#else
++__SHMEM_DEFINE_INIT(pthread_spinlock_t, barrier_global_shmem, PTHREAD_SPINLOCK_INITIALIZER)
++#define barrier_global __SHMEM_GET(barrier_global_shmem)
++#endif
+ 
+ static WINPTHREADS_ATTRIBUTE((noinline)) int
+ barrier_unref(volatile pthread_barrier_t *barrier, int res)
+diff --git a/mingw-w64-libraries/winpthreads/src/cond.c b/mingw-w64-libraries/winpthreads/src/cond.c
+index d50f85b4..4e7a4387 100644
+--- a/mingw-w64-libraries/winpthreads/src/cond.c
++++ b/mingw-w64-libraries/winpthreads/src/cond.c
+@@ -35,6 +35,7 @@
+ #include "thread.h"
+ #include "misc.h"
+ #include "winpthread_internal.h"
++#include "shmem.h"
+ 
+ #include "pthread_compat.h"
+ 
+@@ -80,7 +81,12 @@ void cond_print(volatile pthread_cond_t *c, char *txt)
+ }
+ #endif
+ 
++#if !(USE_SHMEM)
+ static pthread_spinlock_t cond_locked = PTHREAD_SPINLOCK_INITIALIZER;
++#else
++__SHMEM_DEFINE_INIT(pthread_spinlock_t, cond_locked_shmem_cond, PTHREAD_SPINLOCK_INITIALIZER)
++#define cond_locked __SHMEM_GET(cond_locked_shmem_cond)
++#endif
+ 
+ static int
+ cond_static_init (pthread_cond_t *c)
+diff --git a/mingw-w64-libraries/winpthreads/src/rwlock.c b/mingw-w64-libraries/winpthreads/src/rwlock.c
+index 933d4388..b583d3fd 100644
+--- a/mingw-w64-libraries/winpthreads/src/rwlock.c
++++ b/mingw-w64-libraries/winpthreads/src/rwlock.c
+@@ -28,8 +28,14 @@
+ #include "ref.h"
+ #include "rwlock.h"
+ #include "misc.h"
++#include "shmem.h"
+ 
++#if !(USE_SHMEM)
+ static pthread_spinlock_t rwl_global = PTHREAD_SPINLOCK_INITIALIZER;
++#else
++__SHMEM_DEFINE_INIT(pthread_spinlock_t, rwl_global_shmem, PTHREAD_SPINLOCK_INITIALIZER)
++#define rwl_global __SHMEM_GET(rwl_global_shmem)
++#endif
+ 
+ static WINPTHREADS_ATTRIBUTE((noinline)) int rwlock_static_init(pthread_rwlock_t *rw);
+ 
+@@ -148,7 +154,12 @@ void rwl_print(volatile pthread_rwlock_t *rwl, char *txt)
+ }
+ #endif
+ 
++#if !(USE_SHMEM)
+ static pthread_spinlock_t cond_locked = PTHREAD_SPINLOCK_INITIALIZER;
++#else
++__SHMEM_DEFINE_INIT(pthread_spinlock_t, cond_locked_shmem_rwlock, PTHREAD_SPINLOCK_INITIALIZER)
++#define cond_locked __SHMEM_GET(cond_locked_shmem_rwlock)
++#endif
+ 
+ static WINPTHREADS_ATTRIBUTE((noinline)) int rwlock_static_init(pthread_rwlock_t *rw)
+ {
+diff --git a/mingw-w64-libraries/winpthreads/src/shmem.c b/mingw-w64-libraries/winpthreads/src/shmem.c
+new file mode 100644
+index 00000000..c248b24d
+--- /dev/null
++++ b/mingw-w64-libraries/winpthreads/src/shmem.c
+@@ -0,0 +1,117 @@
++/* -- shmem.c --
++ *
++ * See shmem.h for a description of __SHMEM.
++ *
++ * This is the win32 implementation of __SHMEM, based in part on a mechanism
++ * originally developed by Thomas Pfaff and Adriano dos Santos Fernandes,
++ * reimplemented by JohnE as of 2010.
++ *
++ * This code is released into the public domain without warranty; it may be
++ * freely used and redistributed.
++ */
++
++
++#include "shmem.h"
++
++
++#if USE_SHMEM
++
++
++#ifndef WIN32_LEAN_AND_MEAN
++# define WIN32_LEAN_AND_MEAN
++#endif
++#include <windows.h>
++#include <malloc.h>
++
++
++static const char* shmem_version_prefix = "gcc-shmem-tdm2";
++
++
++static void __w32sp_trap(void)
++{
++	asm("int $0x3");
++}
++
++
++static void* get_ptr_from_atom(ATOM atom, char* name_buf, int name_buf_len, int ptr_offset)
++{
++	int ptr_len = sizeof(void*) * 8;
++	if (name_buf_len - ptr_offset < ptr_len)
++		__w32sp_trap();
++	if (!GetAtomNameA(atom, name_buf, name_buf_len))
++		__w32sp_trap();
++	size_t ptr = 0;
++	int i = 0;
++	for (; i < ptr_len; ++i)
++	{
++		if (name_buf[ptr_offset + i] == 'A')
++			ptr |= (1 << (ptr_len - i));
++	}
++	return (void*)ptr;
++}
++
++
++void* __SHMEM_CONCAT2(SHMEM_NAMESPACE, grab)(const char* name, int size, void (*initfunc)(void*))
++{
++	int prefix_len = strlen(shmem_version_prefix);
++	int name_len = strlen(name);
++	int ptr_len = sizeof(void*) * 8;
++
++	char full_atom_name[prefix_len + 1 + name_len + 1 + ptr_len + 1];
++
++	memcpy(full_atom_name, shmem_version_prefix, prefix_len);
++	full_atom_name[prefix_len] = '-';
++	memcpy(full_atom_name + prefix_len + 1, name, name_len);
++	memset(full_atom_name + prefix_len + 1 + name_len + 1, 'a', ptr_len);
++	full_atom_name[prefix_len + 1 + name_len + 1 + ptr_len] = 0;
++
++	full_atom_name[prefix_len + 1 + name_len] = 0;
++	HANDLE hmutex = CreateMutexA(0, FALSE, full_atom_name);
++	full_atom_name[prefix_len + 1 + name_len] = '-';
++	if (WaitForSingleObject(hmutex, INFINITE) != WAIT_OBJECT_0)
++		__w32sp_trap();
++
++	ATOM atom = FindAtomA(full_atom_name);
++
++	void* ret = 0;
++
++	if (atom)
++	{
++		ret = get_ptr_from_atom(atom, full_atom_name,
++		 prefix_len + 1 + name_len + 1 + ptr_len, prefix_len + 1 + name_len + 1);
++	}
++	else
++	{
++		void* shared_mem = malloc(size);
++
++		int i = 0;
++		for (; i < ptr_len; ++i)
++		{
++			if ((((size_t)shared_mem) >> (ptr_len - i)) & 1)
++				full_atom_name[prefix_len + 1 + name_len + 1 + i] = 'A';
++		}
++
++		atom = AddAtomA(full_atom_name);
++		if (!atom)
++			__w32sp_trap();
++
++		ret = get_ptr_from_atom(atom, full_atom_name,
++		 prefix_len + 1 + name_len + 1 + ptr_len, prefix_len + 1 + name_len + 1);
++		if (ret == shared_mem)
++		{
++			memset(ret, 0, size);
++			if (initfunc)
++				initfunc(ret);
++		}
++		else
++			free(shared_mem);
++	}
++
++	ReleaseMutex(hmutex);
++	CloseHandle(hmutex);
++
++	return ret;
++}
++
++
++#endif
+diff --git a/mingw-w64-libraries/winpthreads/src/shmem.h b/mingw-w64-libraries/winpthreads/src/shmem.h
+new file mode 100644
+index 00000000..9c1781b5
+--- /dev/null
++++ b/mingw-w64-libraries/winpthreads/src/shmem.h
+@@ -0,0 +1,115 @@
++/* -- shmem.h --
++ *
++ * The __SHMEM mechanism is for sharing named pointers among the instances of a
++ * static library compiled into separate modules (binaries or shared libraries)
++ * in one runtime program. It's used in libgcc and libstdc++ to be able to
++ * propagate exceptions out of shared libraries even which libgcc and libstdc++
++ * are compiled in statically.
++ *
++ * This code is released into the public domain without warranty; it may be
++ * freely used and redistributed.
++ */
++
++
++#if defined(_WIN32) || defined(_WIN64)
++#define HAVE_SHMEM_IMPL 1
++#else
++#define HAVE_SHMEM_IMPL 0
++#endif
++
++/*
++#if defined(SHARED) || defined(DLL_EXPORT)
++#define USE_SHMEM 0
++#else
++*/
++#define USE_SHMEM 1
++/*
++#endif
++*/
++
++#if HAVE_SHMEM_IMPL && USE_SHMEM
++
++
++#define SHMEM_NAMESPACE __shmem_winpthreads_
++
++
++#ifdef __cplusplus
++#define __SHMEM_CLINK extern "C"
++#else
++#define __SHMEM_CLINK
++#endif
++
++
++#define __SHMEM_CONCAT2(a, b) __CONCAT2_INDIR(a, b)
++#define __CONCAT2_INDIR(a, b) a ## b
++#define __SHMEM_CONCAT3(a, b, c) __CONCAT3_INDIR(a, b, c)
++#define __CONCAT3_INDIR(a, b, c) a ## b ## c
++
++
++__SHMEM_CLINK void* __SHMEM_CONCAT2(SHMEM_NAMESPACE, grab)(const char *name, int size, void (*initfunc)(void *));
++
++
++#define __SHMEM_DEFINE(type, name) \
++ type* __SHMEM_CONCAT3(SHMEM_NAMESPACE, ptr_, name) = 0; \
++ type* __SHMEM_CONCAT3(SHMEM_NAMESPACE, grabber_, name)(); \
++ type* __SHMEM_CONCAT3(SHMEM_NAMESPACE, grabber_, name)() \
++ { \
++   return (type*)__SHMEM_CONCAT2(SHMEM_NAMESPACE, grab)(# name, sizeof(type), 0); \
++ }
++
++#define __SHMEM_DEFINE_INIT(type, name, initval) \
++ type* __SHMEM_CONCAT3(SHMEM_NAMESPACE, ptr_, name) = 0; \
++ __SHMEM_CLINK void __SHMEM_CONCAT3(SHMEM_NAMESPACE, init_, name)(void *mem) \
++ { \
++   type temp = initval; \
++   *((type*)mem) = temp; \
++ } \
++ type* __SHMEM_CONCAT3(SHMEM_NAMESPACE, grabber_, name)() \
++ { \
++   return (type*)__SHMEM_CONCAT2(SHMEM_NAMESPACE, grab)(# name, sizeof(type), __SHMEM_CONCAT3(SHMEM_NAMESPACE, init_, name)); \
++ }
++
++#define __SHMEM_DEFINE_ARRAY(type, name, size) \
++ type* __SHMEM_CONCAT3(SHMEM_NAMESPACE, ptr_, name) = 0; \
++ type* __SHMEM_CONCAT3(SHMEM_NAMESPACE, grabber_, name)() \
++ { \
++   return (type*)__SHMEM_CONCAT2(SHMEM_NAMESPACE, grab)(# name, sizeof(type) * size, 0); \
++ }
++
++
++#define __SHMEM_DECLARE(type, name) \
++ extern type* __SHMEM_CONCAT3(SHMEM_NAMESPACE, ptr_, name); \
++ type* __SHMEM_CONCAT3(SHMEM_NAMESPACE, grabber_, name)();
++
++
++#define __SHMEM_GET(name) \
++ (*( \
++ (__SHMEM_CONCAT3(SHMEM_NAMESPACE, ptr_, name)) \
++ ? \
++ (__SHMEM_CONCAT3(SHMEM_NAMESPACE, ptr_, name)) \
++ : \
++ ((__SHMEM_CONCAT3(SHMEM_NAMESPACE, ptr_, name)) = __SHMEM_CONCAT3(SHMEM_NAMESPACE, grabber_, name)()) \
++ ))
++
++#define __SHMEM_GET_ARRAY(name) \
++ ( \
++ (__SHMEM_CONCAT3(SHMEM_NAMESPACE, ptr_, name)) \
++ ? \
++ (__SHMEM_CONCAT3(SHMEM_NAMESPACE, ptr_, name)) \
++ : \
++ ((__SHMEM_CONCAT3(SHMEM_NAMESPACE, ptr_, name)) = __SHMEM_CONCAT3(SHMEM_NAMESPACE, grabber_, name)()) \
++ )
++
++
++#else
++
++
++#define __SHMEM_DEFINE(type, name) type name;
++#define __SHMEM_DEFINE_INIT(type, name, initval) type name = initval;
++#define __SHMEM_DEFINE_ARRAY(type, name, size) type name[size];
++#define __SHMEM_DECLARE(type, name) extern type name;
++#define __SHMEM_GET(name) name
++#define __SHMEM_GET_ARRAY(name) name
++
++
++#endif
+diff --git a/mingw-w64-libraries/winpthreads/src/thread.c b/mingw-w64-libraries/winpthreads/src/thread.c
+index 1b12edb4..4124c4c6 100644
+--- a/mingw-w64-libraries/winpthreads/src/thread.c
++++ b/mingw-w64-libraries/winpthreads/src/thread.c
+@@ -30,29 +30,47 @@
+ #include "thread.h"
+ #include "misc.h"
+ #include "winpthread_internal.h"
++#include "shmem.h"
+ 
+ static _pthread_v *__pthread_self_lite (void);
+ 
+-void (**_pthread_key_dest)(void *) = NULL;
++typedef void (**pthread_key_dest_func_ptr)(void *);
++__SHMEM_DEFINE(pthread_key_dest_func_ptr, _pthread_key_dest_shmem)
++#define _pthread_key_dest __SHMEM_GET(_pthread_key_dest_shmem)
+ 
+-static volatile long _pthread_cancelling;
+-static int _pthread_concur;
++__SHMEM_DEFINE(long, _pthread_cancelling_shmem)
++#define _pthread_cancelling __SHMEM_GET(_pthread_cancelling_shmem)
++__SHMEM_DEFINE(int, _pthread_concur_shmem)
++#define _pthread_concur __SHMEM_GET(_pthread_concur_shmem)
+ 
+ /* FIXME Will default to zero as needed */
+-static pthread_once_t _pthread_tls_once;
+-static DWORD _pthread_tls = 0xffffffff;
+-
+-static pthread_rwlock_t _pthread_key_lock = PTHREAD_RWLOCK_INITIALIZER;
+-static unsigned long _pthread_key_max=0L;
+-static unsigned long _pthread_key_sch=0L;
+-
+-static _pthread_v *pthr_root = NULL, *pthr_last = NULL;
+-static pthread_mutex_t mtx_pthr_locked = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
+-
+-static __pthread_idlist *idList = NULL;
+-static size_t idListCnt = 0;
+-static size_t idListMax = 0;
+-static pthread_t idListNextId = 0;
++__SHMEM_DEFINE(pthread_once_t, _pthread_tls_once_shmem)
++#define _pthread_tls_once __SHMEM_GET(_pthread_tls_once_shmem)
++__SHMEM_DEFINE_INIT(DWORD, _pthread_tls_shmem, 0xffffffff)
++#define _pthread_tls __SHMEM_GET(_pthread_tls_shmem)
++
++__SHMEM_DEFINE_INIT(pthread_rwlock_t, _pthread_key_lock_shmem, PTHREAD_RWLOCK_INITIALIZER)
++#define _pthread_key_lock __SHMEM_GET(_pthread_key_lock_shmem)
++__SHMEM_DEFINE(unsigned long, _pthread_key_max_shmem)
++#define _pthread_key_max __SHMEM_GET(_pthread_key_max_shmem)
++__SHMEM_DEFINE(unsigned long, _pthread_key_sch_shmem)
++#define _pthread_key_sch __SHMEM_GET(_pthread_key_sch_shmem)
++
++__SHMEM_DEFINE(_pthread_v*, pthr_root_shmem)
++#define pthr_root __SHMEM_GET(pthr_root_shmem)
++__SHMEM_DEFINE(_pthread_v*, pthr_last_shmem)
++#define pthr_last __SHMEM_GET(pthr_last_shmem)
++__SHMEM_DEFINE_INIT(pthread_mutex_t, mtx_pthr_locked_shmem, PTHREAD_RECURSIVE_MUTEX_INITIALIZER)
++#define mtx_pthr_locked __SHMEM_GET(mtx_pthr_locked_shmem)
++
++__SHMEM_DEFINE(__pthread_idlist*, idList_shmem)
++#define idList __SHMEM_GET(idList_shmem)
++__SHMEM_DEFINE(size_t, idListCnt_shmem)
++#define idListCnt __SHMEM_GET(idListCnt_shmem)
++__SHMEM_DEFINE(size_t, idListMax_shmem)
++#define idListMax __SHMEM_GET(idListMax_shmem)
++__SHMEM_DEFINE(pthread_t, idListNextId_shmem)
++#define idListNextId __SHMEM_GET(idListNextId_shmem)
+ 
+ #if !defined(_MSC_VER) || defined (USE_VEH_FOR_MSC_SETTHREADNAME)
+ static void *SetThreadName_VEH_handle = NULL;
+@@ -535,9 +553,15 @@ typedef struct collect_once_t {
+   struct collect_once_t *next;
+ } collect_once_t;
+ 
+-static collect_once_t *once_obj = NULL;
++__SHMEM_DEFINE(collect_once_t*, once_obj_shmem)
++#define once_obj __SHMEM_GET(once_obj_shmem)
+ 
++#if !(USE_SHMEM)
+ static pthread_spinlock_t once_global = PTHREAD_SPINLOCK_INITIALIZER;
++#else
++__SHMEM_DEFINE_INIT(pthread_spinlock_t, once_global_shmem, PTHREAD_SPINLOCK_INITIALIZER)
++#define once_global __SHMEM_GET(once_global_shmem)
++#endif
+ 
+ static collect_once_t *
+ enterOnceObject (pthread_once_t *o)
+@@ -1772,7 +1796,8 @@ pthread_detach (pthread_t t)
+   return r;
+ }
+ 
+-static int dummy_concurrency_level = 0;
++__SHMEM_DEFINE(int, dummy_concurrency_level_shmem)
++#define dummy_concurrency_level __SHMEM_GET(dummy_concurrency_level_shmem)
+ 
+ int
+ pthread_getconcurrency (void)
