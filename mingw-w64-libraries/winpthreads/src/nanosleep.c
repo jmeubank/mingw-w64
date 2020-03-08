@@ -5,7 +5,9 @@
  */
 
 #include <errno.h>
-#include <time.h>
+#ifdef __MINGW64__
+#   include <time.h>
+#endif
 #include <windows.h>
 #include "pthread.h"
 #include "pthread_time.h"

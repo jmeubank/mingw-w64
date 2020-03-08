@@ -21,7 +21,7 @@
 */
 
 #include <windows.h>
-#include <strsafe.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
@@ -1861,11 +1861,8 @@ pthread_getname_np (pthread_t thread, char *name, size_t len)
       return 0;
     }
 
-  if (strlen (tv->thread_name) >= len)
-    return ERANGE;
-
-  result = StringCchCopyNA (name, len, tv->thread_name, len - 1);
-  if (SUCCEEDED (result))
+  result = memccpy(name, tv->thread_name, '\0', len);
+  if (result)
     return 0;
 
   return ERANGE;

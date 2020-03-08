@@ -6,7 +6,9 @@
 
 #include <errno.h>
 #include <stdint.h>
-#include <time.h>
+#ifdef __MINGW64__
+#   include <time.h>
+#endif
 #include <windows.h>
 #ifndef IN_WINPTHREAD
 #define IN_WINPTHREAD 1
@@ -50,7 +52,7 @@ static WINPTHREADS_INLINE int lc_set_errno(int result)
  *         If the function fails, the return value is -1,
  *         with errno set to indicate the error.
  */
-int clock_getres(clockid_t clock_id, struct timespec *res)
+int __pthread_clock_getres(__winpthreads_clockid_t clock_id, struct timespec *res)
 {
     switch(clock_id) {
     case CLOCK_MONOTONIC:
@@ -106,7 +108,7 @@ int clock_getres(clockid_t clock_id, struct timespec *res)
  *         If the function fails, the return value is -1,
  *         with errno set to indicate the error.
  */
-int clock_gettime(clockid_t clock_id, struct timespec *tp)
+int __pthread_clock_gettime(__winpthreads_clockid_t clock_id, struct timespec *tp)
 {
     unsigned __int64 t;
     LARGE_INTEGER pf, pc;
@@ -184,7 +186,7 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
  *         If the function fails, the return value is -1,
  *         with errno set to indicate the error.
  */
-int clock_nanosleep(clockid_t clock_id, int flags,
+int clock_nanosleep(__winpthreads_clockid_t clock_id, int flags,
                            const struct timespec *request,
                            struct timespec *remain)
 {
@@ -197,7 +199,7 @@ int clock_nanosleep(clockid_t clock_id, int flags,
         return nanosleep(request, remain);
 
     /* TIMER_ABSTIME = 1 */
-    clock_gettime(CLOCK_REALTIME, &tp);
+    __pthread_clock_gettime(CLOCK_REALTIME, &tp);
 
     tp.tv_sec = request->tv_sec - tp.tv_sec;
     tp.tv_nsec = request->tv_nsec - tp.tv_nsec;
@@ -217,7 +219,7 @@ int clock_nanosleep(clockid_t clock_id, int flags,
  *         If the function fails, the return value is -1,
  *         with errno set to indicate the error.
  */
-int clock_settime(clockid_t clock_id, const struct timespec *tp)
+int __pthread_clock_settime(__winpthreads_clockid_t clock_id, const struct timespec *tp)
 {
     SYSTEMTIME st;
 
