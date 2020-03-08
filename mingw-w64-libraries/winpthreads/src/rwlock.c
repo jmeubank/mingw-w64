@@ -28,8 +28,14 @@
 #include "ref.h"
 #include "rwlock.h"
 #include "misc.h"
+#include "shmem.h"
 
+#if !(USE_SHMEM)
 static pthread_spinlock_t rwl_global = PTHREAD_SPINLOCK_INITIALIZER;
+#else
+__SHMEM_DEFINE_INIT(pthread_spinlock_t, rwl_global_shmem, PTHREAD_SPINLOCK_INITIALIZER)
+#define rwl_global __SHMEM_GET(rwl_global_shmem)
+#endif
 
 static WINPTHREADS_ATTRIBUTE((noinline)) int rwlock_static_init(pthread_rwlock_t *rw);
 
@@ -148,7 +154,12 @@ void rwl_print(volatile pthread_rwlock_t *rwl, char *txt)
 }
 #endif
 
+#if !(USE_SHMEM)
 static pthread_spinlock_t cond_locked = PTHREAD_SPINLOCK_INITIALIZER;
+#else
+__SHMEM_DEFINE_INIT(pthread_spinlock_t, cond_locked_shmem_rwlock, PTHREAD_SPINLOCK_INITIALIZER)
+#define cond_locked __SHMEM_GET(cond_locked_shmem_rwlock)
+#endif
 
 static WINPTHREADS_ATTRIBUTE((noinline)) int rwlock_static_init(pthread_rwlock_t *rw)
 {

@@ -30,29 +30,47 @@
 #include "thread.h"
 #include "misc.h"
 #include "winpthread_internal.h"
+#include "shmem.h"
 
 static _pthread_v *__pthread_self_lite (void);
 
-void (**_pthread_key_dest)(void *) = NULL;
+typedef void (**pthread_key_dest_func_ptr)(void *);
+__SHMEM_DEFINE(pthread_key_dest_func_ptr, _pthread_key_dest_shmem)
+#define _pthread_key_dest __SHMEM_GET(_pthread_key_dest_shmem)
 
-static volatile long _pthread_cancelling;
-static int _pthread_concur;
+__SHMEM_DEFINE(long, _pthread_cancelling_shmem)
+#define _pthread_cancelling __SHMEM_GET(_pthread_cancelling_shmem)
+__SHMEM_DEFINE(int, _pthread_concur_shmem)
+#define _pthread_concur __SHMEM_GET(_pthread_concur_shmem)
 
 /* FIXME Will default to zero as needed */
-static pthread_once_t _pthread_tls_once;
-static DWORD _pthread_tls = 0xffffffff;
+__SHMEM_DEFINE(pthread_once_t, _pthread_tls_once_shmem)
+#define _pthread_tls_once __SHMEM_GET(_pthread_tls_once_shmem)
+__SHMEM_DEFINE_INIT(DWORD, _pthread_tls_shmem, 0xffffffff)
+#define _pthread_tls __SHMEM_GET(_pthread_tls_shmem)
 
-static pthread_rwlock_t _pthread_key_lock = PTHREAD_RWLOCK_INITIALIZER;
-static unsigned long _pthread_key_max=0L;
-static unsigned long _pthread_key_sch=0L;
+__SHMEM_DEFINE_INIT(pthread_rwlock_t, _pthread_key_lock_shmem, PTHREAD_RWLOCK_INITIALIZER)
+#define _pthread_key_lock __SHMEM_GET(_pthread_key_lock_shmem)
+__SHMEM_DEFINE(unsigned long, _pthread_key_max_shmem)
+#define _pthread_key_max __SHMEM_GET(_pthread_key_max_shmem)
+__SHMEM_DEFINE(unsigned long, _pthread_key_sch_shmem)
+#define _pthread_key_sch __SHMEM_GET(_pthread_key_sch_shmem)
 
-static _pthread_v *pthr_root = NULL, *pthr_last = NULL;
-static pthread_mutex_t mtx_pthr_locked = PTHREAD_RECURSIVE_MUTEX_INITIALIZER;
+__SHMEM_DEFINE(_pthread_v*, pthr_root_shmem)
+#define pthr_root __SHMEM_GET(pthr_root_shmem)
+__SHMEM_DEFINE(_pthread_v*, pthr_last_shmem)
+#define pthr_last __SHMEM_GET(pthr_last_shmem)
+__SHMEM_DEFINE_INIT(pthread_mutex_t, mtx_pthr_locked_shmem, PTHREAD_RECURSIVE_MUTEX_INITIALIZER)
+#define mtx_pthr_locked __SHMEM_GET(mtx_pthr_locked_shmem)
 
-static __pthread_idlist *idList = NULL;
-static size_t idListCnt = 0;
-static size_t idListMax = 0;
-static pthread_t idListNextId = 0;
+__SHMEM_DEFINE(__pthread_idlist*, idList_shmem)
+#define idList __SHMEM_GET(idList_shmem)
+__SHMEM_DEFINE(size_t, idListCnt_shmem)
+#define idListCnt __SHMEM_GET(idListCnt_shmem)
+__SHMEM_DEFINE(size_t, idListMax_shmem)
+#define idListMax __SHMEM_GET(idListMax_shmem)
+__SHMEM_DEFINE(pthread_t, idListNextId_shmem)
+#define idListNextId __SHMEM_GET(idListNextId_shmem)
 
 #if !defined(_MSC_VER) || defined (USE_VEH_FOR_MSC_SETTHREADNAME)
 static void *SetThreadName_VEH_handle = NULL;
@@ -535,9 +553,15 @@ typedef struct collect_once_t {
   struct collect_once_t *next;
 } collect_once_t;
 
-static collect_once_t *once_obj = NULL;
+__SHMEM_DEFINE(collect_once_t*, once_obj_shmem)
+#define once_obj __SHMEM_GET(once_obj_shmem)
 
+#if !(USE_SHMEM)
 static pthread_spinlock_t once_global = PTHREAD_SPINLOCK_INITIALIZER;
+#else
+__SHMEM_DEFINE_INIT(pthread_spinlock_t, once_global_shmem, PTHREAD_SPINLOCK_INITIALIZER)
+#define once_global __SHMEM_GET(once_global_shmem)
+#endif
 
 static collect_once_t *
 enterOnceObject (pthread_once_t *o)
@@ -1772,7 +1796,8 @@ pthread_detach (pthread_t t)
   return r;
 }
 
-static int dummy_concurrency_level = 0;
+__SHMEM_DEFINE(int, dummy_concurrency_level_shmem)
+#define dummy_concurrency_level __SHMEM_GET(dummy_concurrency_level_shmem)
 
 int
 pthread_getconcurrency (void)

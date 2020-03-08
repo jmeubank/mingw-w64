@@ -35,6 +35,7 @@
 #include "thread.h"
 #include "misc.h"
 #include "winpthread_internal.h"
+#include "shmem.h"
 
 #include "pthread_compat.h"
 
@@ -80,7 +81,12 @@ void cond_print(volatile pthread_cond_t *c, char *txt)
 }
 #endif
 
+#if !(USE_SHMEM)
 static pthread_spinlock_t cond_locked = PTHREAD_SPINLOCK_INITIALIZER;
+#else
+__SHMEM_DEFINE_INIT(pthread_spinlock_t, cond_locked_shmem_cond, PTHREAD_SPINLOCK_INITIALIZER)
+#define cond_locked __SHMEM_GET(cond_locked_shmem_cond)
+#endif
 
 static int
 cond_static_init (pthread_cond_t *c)
