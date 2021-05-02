@@ -6,7 +6,9 @@
 
 #include <errno.h>
 #include <stdint.h>
-#include <time.h>
+#ifdef __MINGW64__
+#   include <time.h>
+#endif
 #include <windows.h>
 #ifndef IN_WINPTHREAD
 #define IN_WINPTHREAD 1
@@ -50,10 +52,10 @@ static WINPTHREADS_INLINE int lc_set_errno(int result)
  *         If the function fails, the return value is -1,
  *         with errno set to indicate the error.
  */
-int clock_getres(clockid_t clock_id, struct timespec *res)
+int __pthread_clock_getres(__winpthreads_clockid_t clock_id, struct timespec *res)
 {
     switch(clock_id) {
-    case CLOCK_MONOTONIC:
+    case __WINPTHREADS_CLOCK_MONOTONIC:
         {
             LARGE_INTEGER pf;
 
@@ -68,9 +70,9 @@ int clock_getres(clockid_t clock_id, struct timespec *res)
             return 0;
         }
 
-    case CLOCK_REALTIME:
-    case CLOCK_PROCESS_CPUTIME_ID:
-    case CLOCK_THREAD_CPUTIME_ID:
+    case __WINPTHREADS_CLOCK_REALTIME:
+    case __WINPTHREADS_CLOCK_PROCESS_CPUTIME_ID:
+    case __WINPTHREADS_CLOCK_THREAD_CPUTIME_ID:
         {
             DWORD   timeAdjustment, timeIncrement;
             BOOL    isTimeAdjustmentDisabled;
@@ -106,7 +108,7 @@ int clock_getres(clockid_t clock_id, struct timespec *res)
  *         If the function fails, the return value is -1,
  *         with errno set to indicate the error.
  */
-int clock_gettime(clockid_t clock_id, struct timespec *tp)
+int __pthread_clock_gettime(__winpthreads_clockid_t clock_id, struct timespec *tp)
 {
     unsigned __int64 t;
     LARGE_INTEGER pf, pc;
@@ -116,7 +118,7 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
     }  ct, et, kt, ut;
 
     switch(clock_id) {
-    case CLOCK_REALTIME:
+    case __WINPTHREADS_CLOCK_REALTIME:
         {
             GetSystemTimeAsFileTime(&ct.ft);
             t = ct.u64 - DELTA_EPOCH_IN_100NS;
@@ -126,7 +128,7 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
             return 0;
         }
 
-    case CLOCK_MONOTONIC:
+    case __WINPTHREADS_CLOCK_MONOTONIC:
         {
             if (QueryPerformanceFrequency(&pf) == 0)
                 return lc_set_errno(EINVAL);
@@ -144,7 +146,7 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
             return 0;
         }
 
-    case CLOCK_PROCESS_CPUTIME_ID:
+    case __WINPTHREADS_CLOCK_PROCESS_CPUTIME_ID:
         {
         if(0 == GetProcessTimes(GetCurrentProcess(), &ct.ft, &et.ft, &kt.ft, &ut.ft))
             return lc_set_errno(EINVAL);
@@ -155,7 +157,7 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
         return 0;
         }
 
-    case CLOCK_THREAD_CPUTIME_ID: 
+    case __WINPTHREADS_CLOCK_THREAD_CPUTIME_ID: 
         {
             if(0 == GetThreadTimes(GetCurrentThread(), &ct.ft, &et.ft, &kt.ft, &ut.ft))
                 return lc_set_errno(EINVAL);
@@ -184,20 +186,20 @@ int clock_gettime(clockid_t clock_id, struct timespec *tp)
  *         If the function fails, the return value is -1,
  *         with errno set to indicate the error.
  */
-int clock_nanosleep(clockid_t clock_id, int flags,
+int clock_nanosleep(__winpthreads_clockid_t clock_id, int flags,
                            const struct timespec *request,
                            struct timespec *remain)
 {
     struct timespec tp;
 
-    if (clock_id != CLOCK_REALTIME)
+    if (clock_id != __WINPTHREADS_CLOCK_REALTIME)
         return lc_set_errno(EINVAL);
 
     if (flags == 0)
         return nanosleep(request, remain);
 
     /* TIMER_ABSTIME = 1 */
-    clock_gettime(CLOCK_REALTIME, &tp);
+    __pthread_clock_gettime(__WINPTHREADS_CLOCK_REALTIME, &tp);
 
     tp.tv_sec = request->tv_sec - tp.tv_sec;
     tp.tv_nsec = request->tv_nsec - tp.tv_nsec;
@@ -217,7 +219,7 @@ int clock_nanosleep(clockid_t clock_id, int flags,
  *         If the function fails, the return value is -1,
  *         with errno set to indicate the error.
  */
-int clock_settime(clockid_t clock_id, const struct timespec *tp)
+int __pthread_clock_settime(__winpthreads_clockid_t clock_id, const struct timespec *tp)
 {
     SYSTEMTIME st;
 
@@ -226,7 +228,7 @@ int clock_settime(clockid_t clock_id, const struct timespec *tp)
         FILETIME ft;
     }  t;
 
-    if (clock_id != CLOCK_REALTIME)
+    if (clock_id != __WINPTHREADS_CLOCK_REALTIME)
         return lc_set_errno(EINVAL);
 
     t.u64 = tp->tv_sec * (__int64) POW10_7 + tp->tv_nsec / 100 + DELTA_EPOCH_IN_100NS;

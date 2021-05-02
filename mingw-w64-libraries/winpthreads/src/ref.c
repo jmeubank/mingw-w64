@@ -21,7 +21,9 @@
 */
 
 #include <windows.h>
-#include <winternl.h>
+#ifdef __MINGW64__
+# include <winternl.h>
+#endif
 #include <stdio.h>
 #include "pthread.h"
 #include "semaphore.h"

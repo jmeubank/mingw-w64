@@ -62,6 +62,11 @@ typedef long long LONGBAG;
 typedef long LONGBAG;
 #endif
 
+#ifndef WINAPI_FAMILY_PARTITION
+#  define WINAPI_PARTITION_DESKTOP 1
+#  define WINAPI_FAMILY_PARTITION(x) (x & 1)
+#endif
+
 #if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
 #undef GetHandleInformation
 #define GetHandleInformation(h,f)  (1)

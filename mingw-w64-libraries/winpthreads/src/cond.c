@@ -27,7 +27,9 @@
 #include <windows.h>
 #include <stdio.h>
 #include <malloc.h>
-#include <time.h>
+#ifdef __MINGW64__
+# include <time.h>
+#endif
 #include "pthread.h"
 #include "pthread_time.h"
 #include "ref.h"
@@ -127,7 +129,7 @@ pthread_condattr_getpshared (const pthread_condattr_t *a, int *s)
 }
 
 int
-pthread_condattr_getclock (const pthread_condattr_t *a, clockid_t *clock_id)
+pthread_condattr_getclock (const pthread_condattr_t *a, __winpthreads_clockid_t *clock_id)
 {
   if (!a || !clock_id)
     return EINVAL;
@@ -136,7 +138,7 @@ pthread_condattr_getclock (const pthread_condattr_t *a, clockid_t *clock_id)
 }
 
 int
-pthread_condattr_setclock(pthread_condattr_t *a, clockid_t clock_id)
+pthread_condattr_setclock(pthread_condattr_t *a, __winpthreads_clockid_t clock_id)
 {
   if (!a || clock_id != 0)
     return EINVAL;
@@ -144,18 +146,18 @@ pthread_condattr_setclock(pthread_condattr_t *a, clockid_t clock_id)
 }
 
 int
-__pthread_clock_nanosleep (clockid_t clock_id, int flags, const struct timespec *rqtp,
+__pthread_clock_nanosleep (__winpthreads_clockid_t clock_id, int flags, const struct timespec *rqtp,
 			   struct timespec *rmtp)
 {
   unsigned long long tick, tick2;
   unsigned long long delay;
   DWORD dw;
 
-  if (clock_id != CLOCK_REALTIME
-      && clock_id != CLOCK_MONOTONIC
-      && clock_id != CLOCK_PROCESS_CPUTIME_ID)
+  if (clock_id != __WINPTHREADS_CLOCK_REALTIME
+      && clock_id != __WINPTHREADS_CLOCK_MONOTONIC
+      && clock_id != __WINPTHREADS_CLOCK_PROCESS_CPUTIME_ID)
    return EINVAL;
-  if ((flags & TIMER_ABSTIME) != 0)
+  if ((flags & __WINPTHREADS_TIMER_ABSTIME) != 0)
     delay = _pthread_rel_time_in_ms (rqtp);
   else
     delay = _pthread_time_in_ms_from_timespec (rqtp);

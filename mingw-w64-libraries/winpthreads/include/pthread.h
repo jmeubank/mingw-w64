@@ -60,6 +60,7 @@
 #define WIN_PTHREADS_H
 
 #include <stddef.h>
+#include <stdint.h>
 #include <errno.h>
 #include <sys/types.h>
 
@@ -158,6 +159,7 @@ extern "C" {
 #define PTHREAD_MUTEX_RECURSIVE_NP	PTHREAD_MUTEX_RECURSIVE
 
 void * WINPTHREAD_API pthread_timechange_handler_np(void * dummy);
+struct timespec;
 int    WINPTHREAD_API pthread_delay_np (const struct timespec *interval);
 int    WINPTHREAD_API pthread_num_processors_np(void);
 int    WINPTHREAD_API pthread_set_num_processors_np(int n);
@@ -217,11 +219,16 @@ struct _pthread_cleanup
 /* Windows doesn't have this, so declare it ourselves. */
 #ifndef _TIMESPEC_DEFINED
 #define _TIMESPEC_DEFINED
+/* MinGW.org defines a compatible struct timespec, guarded by
+ * __struct_timespec_defined, but doesn't define struct itimerspec.
+ */
+#if ! __struct_timespec_defined
+#define __struct_timespec_defined 1
 struct timespec {
   time_t  tv_sec;   /* Seconds */
   long    tv_nsec;  /* Nanoseconds */
 };
-
+#endif /* ! __struct_timespec_defined */
 struct itimerspec {
   struct timespec  it_interval;  /* Timer period */
   struct timespec  it_value;     /* Timer expiration */
@@ -385,16 +392,21 @@ int WINPTHREAD_API pthread_condattr_init(pthread_condattr_t *a);
 int WINPTHREAD_API pthread_condattr_getpshared(const pthread_condattr_t *a, int *s);
 int WINPTHREAD_API pthread_condattr_setpshared(pthread_condattr_t *a, int s);
 
-#ifndef __clockid_t_defined
+#ifndef ____winpthreads_clockid_t_defined
+typedef int __winpthreads_clockid_t;
+#define ____winpthreads_clockid_t_defined 1
+#endif  /* ____winpthreads_clockid_t_defined */
+
+#if defined(__MINGW64__) && !defined(__clockid_t_defined)
 typedef int clockid_t;
 #define __clockid_t_defined 1
-#endif  /* __clockid_t_defined */
+#endif
 
 int WINPTHREAD_API pthread_condattr_getclock (const pthread_condattr_t *attr,
-       clockid_t *clock_id);
+       __winpthreads_clockid_t *clock_id);
 int WINPTHREAD_API pthread_condattr_setclock(pthread_condattr_t *attr,
-       clockid_t clock_id);
-int WINPTHREAD_API __pthread_clock_nanosleep(clockid_t clock_id, int flags, const struct timespec *rqtp, struct timespec *rmtp);
+       __winpthreads_clockid_t clock_id);
+int WINPTHREAD_API __pthread_clock_nanosleep(__winpthreads_clockid_t clock_id, int flags, const struct timespec *rqtp, struct timespec *rmtp);
 
 int WINPTHREAD_API pthread_barrierattr_init(void **attr);
 int WINPTHREAD_API pthread_barrierattr_destroy(void **attr);

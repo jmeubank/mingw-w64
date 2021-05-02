@@ -20,7 +20,9 @@
    DEALINGS IN THE SOFTWARE.
 */
 
+#ifdef __MINGW64__
 #include <sys/timeb.h>
+#endif
 
 #ifndef WIN_PTHREADS_TIME_H
 #define WIN_PTHREADS_TIME_H
@@ -45,27 +47,47 @@
 #define _POSIX_THREAD_CPUTIME   200809L
 #endif
 
-#ifndef __clockid_t_defined
-typedef int clockid_t;
-#define __clockid_t_defined 1
-#endif  /* __clockid_t_defined */
+#ifndef __winpthreads_clockid_t_defined
+typedef int __winpthreads_clockid_t;
+#define __winpthreads_clockid_t_defined 1
+#endif  /* __winpthreads_clockid_t_defined */
 
+#if defined(__MINGW64__) && !defined (__clockid_t_defined)
+typedef __winpthreads_clockid_t clockid_t;
+#define __clockid_t_defined 1
+#endif
+
+#ifndef __WINPTHREADS_TIMER_ABSTIME
+#define __WINPTHREADS_TIMER_ABSTIME   1
+#endif
 #ifndef TIMER_ABSTIME
 #define TIMER_ABSTIME   1
 #endif
 
+#ifndef __WINPTHREADS_CLOCK_REALTIME
+#define __WINPTHREADS_CLOCK_REALTIME              0
+#endif
 #ifndef CLOCK_REALTIME
 #define CLOCK_REALTIME              0
 #endif
 
+#ifndef __WINPTHREADS_CLOCK_MONOTONIC
+#define __WINPTHREADS_CLOCK_MONOTONIC             1
+#endif
 #ifndef CLOCK_MONOTONIC
 #define CLOCK_MONOTONIC             1
 #endif
 
+#ifndef __WINPTHREADS_CLOCK_PROCESS_CPUTIME_ID
+#define __WINPTHREADS_CLOCK_PROCESS_CPUTIME_ID    2
+#endif
 #ifndef CLOCK_PROCESS_CPUTIME_ID
 #define CLOCK_PROCESS_CPUTIME_ID    2
 #endif
 
+#ifndef __WINPTHREADS_CLOCK_THREAD_CPUTIME_ID
+#define __WINPTHREADS_CLOCK_THREAD_CPUTIME_ID     3
+#endif
 #ifndef CLOCK_THREAD_CPUTIME_ID
 #define CLOCK_THREAD_CPUTIME_ID     3
 #endif
@@ -83,10 +105,16 @@ extern "C" {
 /* These should really be dllimport'ed if using winpthread dll */
 int __cdecl WINPTHREAD_API nanosleep(const struct timespec *request, struct timespec *remain);
 
-int __cdecl WINPTHREAD_API clock_nanosleep(clockid_t clock_id, int flags, const struct timespec *request, struct timespec *remain);
-int __cdecl WINPTHREAD_API clock_getres(clockid_t clock_id, struct timespec *res);
-int __cdecl WINPTHREAD_API clock_gettime(clockid_t clock_id, struct timespec *tp);
-int __cdecl WINPTHREAD_API clock_settime(clockid_t clock_id, const struct timespec *tp);
+int __cdecl WINPTHREAD_API clock_nanosleep(__winpthreads_clockid_t clock_id, int flags, const struct timespec *request, struct timespec *remain);
+int __cdecl WINPTHREAD_API __pthread_clock_getres(__winpthreads_clockid_t clock_id, struct timespec *res);
+int __cdecl WINPTHREAD_API __pthread_clock_gettime(__winpthreads_clockid_t clock_id, struct timespec *tp);
+int __cdecl WINPTHREAD_API __pthread_clock_settime(__winpthreads_clockid_t clock_id, const struct timespec *tp);
+
+#ifdef __MINGW64__
+inline int clock_getres(__winpthreads_clockid_t clock_id, struct timespec *res) { return __pthread_clock_getres(clock_id, res); }
+inline int clock_gettime(__winpthreads_clockid_t clock_id, struct timespec *tp) { return __pthread_clock_gettime(clock_id, tp); }
+inline int clock_settime(__winpthreads_clockid_t clock_id, const struct timespec *tp) { return __pthread_clock_settime(clock_id, tp); }
+#endif
 
 #pragma pop_macro("WINPTHREAD_API")
 
