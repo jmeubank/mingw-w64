@@ -1,0 +1,7 @@
+# This series applies on GIT commit 36817552657ab6f887d6743c3e8320194cfdced4
+fullstatic.patch
+mingw32.patch
+shmem.patch
+DirectX-9-fixes-for-VLC.patch
+Allow-to-use-bessel-and-complex-functions-without-un.patch
+lib64.patch
